@@ -13,6 +13,8 @@ filepath = "Files/"+ sys.argv[1]
 
 service_bandwidth = int(sys.argv[2])
 
+service_proc = int(sys.argv[3])
+
 with open(filepath+"/device_conn") as f:
     device_conn = [[int(num) for num in line.split()] for line in f]
 
@@ -93,6 +95,22 @@ print("Edge server with least network cost of service deployment: %d" % selected
 ### Network cost minization over
 
 ## Processing cost minization
+
+no_devices = len(device_proc)
+lowest_proc_cost = 99;
+selected_proc_server = 0;
+i=0
+while i < no_devices:
+    if (device_proc[i]>=service_proc):
+        proc_cost = service_proc / device_proc[i]
+        proc_cost = edge_levels[i] * proc_cost
+        if (proc_cost < lowest_proc_cost):
+            lowest_proc_cost = proc_cost;
+            selected_proc_server = i;
+
+    i += 1
+
+print("Edge server with least network cost of service deployment: %d" % selected_proc_server)
 
 
 # #make permuted list of indexes

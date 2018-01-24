@@ -1,4 +1,3 @@
-
 import os
 import random
 import subprocess
@@ -7,6 +6,15 @@ from itertools import repeat
 import matplotlib.pyplot as plt
 import networkx as nx
 
+####################################################
+# This code will generate a network graph comprising
+# of 1 client, X edge servers and 1 cloud node. The
+# values for bandwidth, network connections, network
+# weights and processing powers are randomly chosen
+# between the slice defined by the user. The program
+# will then store the values into files in the same
+# folder organized according to the graph size.
+#####################################################
 
 def decision(probability):
     return random.random() < probability
@@ -25,8 +33,23 @@ levels = []
 
 ###Specify lower and upper bounds of processing costs
 print("#### Enter the processing power bounds of the devices ####")
-proc_edge_low = int(input("Lowest processing power of edge device [Default=2]: ") or "2")
-proc_edge_high = int(input("Highest processing power of edge device [Default=5]: ") or "5")
+proc_edge_low = int(input("Lowest base processing power of edge device [Default=3]: ") or "3")
+proc_edge_high = int(input("Highest base processing power of edge device [Default=6]: ") or "6")
+
+###Specify lower and upper bounds of processing costs
+print("#### Enter the bandwidth bounds of the devices ####")
+bandwidth_edge_low = int(input("Lowest base bandwidth bound of edge device [Default=10]: ") or "10")
+bandwidth_edge_high = int(input("Highest base bandwidth bound of edge device [Default=30]: ") or "30")
+
+###Specify lnetwork connecttion weight
+print("#### Enter the network connection weight ####")
+netw_conn_same_low = int(input("Lowest same level connection weight [Default=1]: ") or "1")
+netw_conn_same_high = int(input("Highest same level connection weight [Default=3]: ") or "3")
+netw_conn_next_low = int(input("Lowest next level connection weight [Default=4]: ") or "4")
+netw_conn_next_high = int(input("Highest next level connection weight [Default=6]: ") or "6")
+
+prob_clientedge = float(input("Enter client probability connectivity to 1st edge layer (0-1) [Default=0.5]: ") or "0.5")
+prob_edgeserver = float(input("Enter client probability connectivity to 1st edge layer (0-1) [Default=0.7]: ") or "0.7")
 
 print("#### Enter the network densities between the devices ####")
 prob_samelevel = float(input("Enter connections density between same level edge cloud (0-1) [Default=0.4]: ") or "0.4")
@@ -67,7 +90,13 @@ G.add_node(0, name='source')
 
 ##Add Device nodes to graph
 for i in enumerate(edge_nodes):
-    G.add_node(i[1],processing=random.randint(proc_edge_low,proc_edge_high),edge_level=levels[i[0]], name=i[1], bandwidth=(levels[i[0]] * random.randint(proc_edge_low,proc_edge_high)))
+    if levels[i[0]] == 1:
+        processing_cost = 2 * random.randint(proc_edge_low,proc_edge_high)
+    elif levels[i[0]] == 2:
+        processing_cost = 1.5 * random.randint(proc_edge_low, proc_edge_high)
+    else:
+        processing_cost = levels[i[0]] * random.randint(proc_edge_low, proc_edge_high)
+    G.add_node(i[1],processing=processing_cost,edge_level=levels[i[0]], name=i[1], bandwidth=(levels[i[0]] * random.randint(bandwidth_edge_low,bandwidth_edge_high)))
 
 G.add_node(total_nodes+1, name='datacenter')
 
@@ -75,6 +104,72 @@ G.add_node(total_nodes+1, name='datacenter')
 processing = list(nx.get_node_attributes(G,'processing').values())
 bandwidth = list(nx.get_node_attributes(G, 'bandwidth').values())
 
+##Calculate average bandwidth per layer
+avgNetw_level = []
+
+lev=levels[len(levels)-1]
+i=0
+while i<=lev:
+    i = i+1
+    sum = 0
+    count = 0
+    j=0
+    while j<len(levels):
+        if levels[j]==i:
+            sum += bandwidth[j]
+            count += 1
+        j += 1
+    if count!=0:
+        avg = sum / count
+        avgNetw_level.append(avg)
+
+##Calculate average bandwidth per layer
+avgProc_level = []
+
+i = 0
+while i <= lev:
+    i = i + 1
+    sum = 0
+    count = 0
+    j = 0
+    while j < len(levels):
+        if levels[j] == i:
+            sum += processing[j]
+            count += 1
+        j += 1
+    if count != 0:
+        avg = sum / count
+        avgProc_level.append(avg)
+
+##Calculate max bandwidth per layer
+maxNetw_level = []
+
+i=0
+while i<=lev:
+    i = i+1
+    max = 0
+    j=0
+    while j<len(levels):
+        if levels[j]==i and bandwidth[j]>max:
+            max = bandwidth[j]
+        j += 1
+    if max!=0:
+        maxNetw_level.append(max)
+
+##Calculate max proc per layer
+maxProc_level = []
+
+i=0
+while i<=lev:
+    i = i+1
+    max = 0
+    j=0
+    while j<len(levels):
+        if levels[j]==i and processing[j]>max:
+            max = processing[j]
+        j += 1
+    if max!=0:
+        maxProc_level.append(max)
 #####################################
 
 ###Add connections between devices
@@ -83,7 +178,8 @@ bandwidth = list(nx.get_node_attributes(G, 'bandwidth').values())
 j=1
 while j<len(edge_nodes):
     if levels[j-1]==1:
-        G.add_edge(0, edge_nodes[j-1], weight=random.randint(1,2))
+        if decision(prob_clientedge):
+            G.add_edge(0, edge_nodes[j-1], weight=random.randint(1,3))
         j=j+1
     else:
         break
@@ -94,10 +190,12 @@ for i in range(len(edge_nodes)):
     while j<len(edge_nodes):
         if levels[i]==levels[j]:
             if decision(prob_samelevel)==True:
-                G.add_edge(i+1, j+1, weight=random.randint(1,2))
+                G.add_edge(i+1, j+1, weight=random.randint(netw_conn_same_low, netw_conn_same_high))
+
         elif levels[j] - levels[i] == 1:
             if decision(prob_nextlevel) == True:
-                G.add_edge(i+1, j+1, weight=random.randint(3, 5))
+                G.add_edge(i+1, j+1, weight=random.randint(netw_conn_next_low, netw_conn_next_high))
+
         else:
             break
 
@@ -107,7 +205,8 @@ for i in range(len(edge_nodes)):
 j=1
 while j<len(edge_nodes)+1:
     if levels[j-1]==edge_levels:
-        G.add_edge(total_nodes+1, edge_nodes[j-1], weight=random.randint(3, 5))
+        if decision(prob_edgeserver):
+            G.add_edge(total_nodes+1, edge_nodes[j-1], weight=random.randint(5, 10))
     j=j+1
 
 ###############################################
@@ -130,6 +229,30 @@ f.close()
 # write bandwidth to file
 f = open(filepath + "/bandwidth", "w")
 for j in enumerate(bandwidth):
+    f.write(str(j[1]) + " ")
+f.close()
+
+# write average bandwidth to file
+f = open(filepath + "/avgbandwidth", "w")
+for j in enumerate(avgNetw_level):
+    f.write(str(j[1]) + " ")
+f.close()
+
+# write average processing to file
+f = open(filepath + "/avgproc", "w")
+for j in enumerate(avgProc_level):
+    f.write(str(j[1]) + " ")
+f.close()
+
+# write max network to file
+f = open(filepath + "/maxbandwidth", "w")
+for j in enumerate(maxNetw_level):
+    f.write(str(j[1]) + " ")
+f.close()
+
+# write max proc to file
+f = open(filepath + "/maxproc", "w")
+for j in enumerate(maxProc_level):
     f.write(str(j[1]) + " ")
 f.close()
 
